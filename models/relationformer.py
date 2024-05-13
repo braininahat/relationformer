@@ -81,7 +81,7 @@ class RelationFormer(nn.Module):
         # feat_list, mask_list, pos_list = self.encoder(samples, self.position_embedding, return_interm_layers=False)
         
         # seresnet
-        feat_list = [self.encoder(samples)]
+        feat_list = [self.encoder(samples.float())]
         mask_list = [torch.zeros(feat_list[0][:, 0, ...].shape, dtype=torch.bool).to(feat_list[0].device)]
         pos_list = [self.position_embedding(mask_list[-1]).to(feat_list[0].device)]
         

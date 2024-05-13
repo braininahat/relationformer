@@ -5,7 +5,7 @@ import numpy as np
 import logging
 from mmcv.utils import get_logger
 import pyvista
-from skimage.measure import marching_cubes_lewiner
+from skimage.measure import marching_cubes
 from scipy.ndimage.morphology import grey_dilation
 from scipy import ndimage
 from itertools import product
