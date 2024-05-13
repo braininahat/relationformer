@@ -13,14 +13,21 @@ from monai.config import TensorOrList
 import warnings
 
 reinit__is_reduced, _ = optional_import(
-    "ignite.metrics.metric", IgniteInfo.OPT_IMPORT_VERSION, min_version, "reinit__is_reduced"
+    "ignite.metrics.metric",
+    IgniteInfo.OPT_IMPORT_VERSION,
+    min_version,
+    "reinit__is_reduced",
 )
 if TYPE_CHECKING:
     from ignite.engine import Engine
     from ignite.metrics import Metric
 else:
-    Engine, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine")
-    Metric, _ = optional_import("ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric")
+    Engine, _ = optional_import(
+        "ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine"
+    )
+    Metric, _ = optional_import(
+        "ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric"
+    )
 
 from abc import ABC, abstractmethod
 
@@ -29,15 +36,19 @@ class MeanSMD(Metric):
     r"""
     Computes Dice score metric from full size Tensor and collects average over batch, class-channels, iterations.
     """
-    def __init__(
-        self, output_transform: Callable = lambda x: x) -> None:
+
+    def __init__(self, output_transform: Callable = lambda x: x) -> None:
         """[summary]
 
         Args:
             output_transform (Callable, optional): [description]. Defaults to lambdax:x.
-        """        ''''''
-        self.metric_fn = StreetMoverDistance(eps=1e-7, max_iter=100, reduction=MetricReduction.MEAN)
-        super().__init__(output_transform=output_transform,)
+        """ """"""
+        self.metric_fn = StreetMoverDistance(
+            eps=1e-7, max_iter=100, reduction=MetricReduction.MEAN
+        )
+        super().__init__(
+            output_transform=output_transform,
+        )
 
     @reinit__is_reduced
     def reset(self) -> None:
@@ -53,7 +64,7 @@ class MeanSMD(Metric):
 
         Returns:
             [type]: [description]
-        """        ''''''
+        """ """"""
         y_A, y_nodes, output_A, output_nodes = output
 
         return self.metric_fn(y_A, y_nodes, output_A, output_nodes)
@@ -66,11 +77,13 @@ class MeanSMD(Metric):
 
         Returns:
             Any: [description]
-        """        ''''''
+        """ """"""
         result = self.metric_fn.aggregate()
         if isinstance(result, (tuple, list)):
             if len(result) > 1:
-                warnings.warn("metric handler can only record the first value of result list.")
+                warnings.warn(
+                    "metric handler can only record the first value of result list."
+                )
             result = result[0]
 
         self._is_reduced = True
@@ -78,7 +91,9 @@ class MeanSMD(Metric):
         # save score of every image into engine.state for other components
         if self.save_details:
             if self._engine is None or self._name is None:
-                raise RuntimeError("please call the attach() function to connect expected engine first.")
+                raise RuntimeError(
+                    "please call the attach() function to connect expected engine first."
+                )
             self._engine.state.metric_details[self._name] = self.metric_fn.get_buffer()
 
         return result.item() if isinstance(result, torch.Tensor) else result
@@ -89,14 +104,13 @@ class MeanSMD(Metric):
         Args:
             engine (Engine): [description]
             name (str): [description]
-        """        ''''''
+        """ """"""
         super().attach(engine=engine, name=name)
         # FIXME: record engine for communication, ignite will support it in the future version soon
         self._engine = engine
         self._name = name
         if self.save_details and not hasattr(engine.state, "metric_details"):
             engine.state.metric_details = {}
-
 
 
 class StreetMoverDistance(ABC):
@@ -112,7 +126,8 @@ class StreetMoverDistance(ABC):
 
     Returns:
         [type]: [description]
-    """    ''''''
+    """ """"""
+
     def __init__(self, eps, max_iter, reduction="mean"):
         """[summary]
 
@@ -120,10 +135,12 @@ class StreetMoverDistance(ABC):
             eps ([type]): [description]
             max_iter ([type]): [description]
             reduction (str, optional): [description]. Defaults to "mean".
-        """        ''''''
+        """ """"""
         super(StreetMoverDistance, self).__init__()
         self.reduction = reduction
-        self.sinkhorn_distance = SinkhornDistance(eps=eps, max_iter=max_iter, reduction=reduction)
+        self.sinkhorn_distance = SinkhornDistance(
+            eps=eps, max_iter=max_iter, reduction=reduction
+        )
         self.buffer_num: int = 0
         self._buffers: Optional[List[List[torch.Tensor]]] = None
         self._synced_tensors: Optional[List[Optional[torch.Tensor]]] = None
@@ -140,7 +157,7 @@ class StreetMoverDistance(ABC):
 
         Returns:
             [type]: [description]
-        """        ''''''
+        """ """"""
 
         ret = self._compute_list(node_list, edge_list, pred_node_list, pred_edge_list)
 
@@ -159,29 +176,40 @@ class StreetMoverDistance(ABC):
 
         Returns:
             [type]: [description]
-        """        ''''''
-        ret=[]
+        """ """"""
+        ret = []
         # compute dice (BxC) for each channel for each batch
-        for nodes, edges, pred_nodes, pred_edges in zip(node_list, edge_list, pred_node_list, pred_edge_list):
+        for nodes, edges, pred_nodes, pred_edges in zip(
+            node_list, edge_list, pred_node_list, pred_edge_list
+        ):
             # print(nodes.shape, edges.shape)
             A = torch.zeros((nodes.shape[0], nodes.shape[0]))
             pred_A = torch.zeros((pred_nodes.shape[0], pred_nodes.shape[0]))
-            
-            A[edges[:,0],edges[:,1]] = 1
-            A[edges[:,1],edges[:,0]] = 1
+
+            A[edges[:, 0], edges[:, 1]] = 1
+            A[edges[:, 1], edges[:, 0]] = 1
             A = torch.tril(A)
-            
-            if nodes.shape[0]>1 and pred_nodes.shape[0]>1 and pred_edges.size != 0:
+
+            if nodes.shape[0] > 1 and pred_nodes.shape[0] > 1 and pred_edges.size != 0:
                 # print(pred_edges)
-                pred_A[pred_edges[:,0], pred_edges[:,1]] = 1.0
-                pred_A[pred_edges[:,1], pred_edges[:,0]] = 1.0
+                pred_A[pred_edges[:, 0], pred_edges[:, 1]] = 1.0
+                pred_A[pred_edges[:, 1], pred_edges[:, 0]] = 1.0
                 pred_A = torch.tril(pred_A)
 
-                ret.append(compute_meanSMD(
-                    A, nodes, pred_A, pred_nodes, self.sinkhorn_distance, n_points=100
-                ))
+                ret.append(
+                    compute_meanSMD(
+                        A,
+                        nodes,
+                        pred_A,
+                        pred_nodes,
+                        self.sinkhorn_distance,
+                        n_points=100,
+                    )
+                )
             else:
-                ret.append(torch.tensor([1], dtype=torch.float)) # TODO: fix the loss mismatch issue
+                ret.append(
+                    torch.tensor([1], dtype=torch.float)
+                )  # TODO: fix the loss mismatch issue
 
         ret = torch.cat(ret, dim=0)
         return ret
@@ -208,13 +236,17 @@ class StreetMoverDistance(ABC):
         if self._buffers is None:
             self._buffers = [[] for _ in range(data_len)]
         elif len(self._buffers) != data_len:
-            raise ValueError(f"data length: {data_len} doesn't match buffers length: {len(self._buffers)}.")
+            raise ValueError(
+                f"data length: {data_len} doesn't match buffers length: {len(self._buffers)}."
+            )
         if self._synced_tensors is None:
             self._synced_tensors = [None for _ in range(data_len)]
 
         for i, d in enumerate(data):
             if not isinstance(d, torch.Tensor):
-                raise ValueError(f"the data to cumulate in a buffer must be PyTorch Tensor, but got: {type(d)}.")
+                raise ValueError(
+                    f"the data to cumulate in a buffer must be PyTorch Tensor, but got: {type(d)}."
+                )
             self._buffers[i].append(d)
         self._synced = False
 
@@ -239,7 +271,10 @@ class StreetMoverDistance(ABC):
 
         """
         # print(self._buffers)
-        self._synced_tensors = [evenly_divisible_all_gather(torch.cat(b, dim=0), concat=True) for b in self._buffers]
+        self._synced_tensors = [
+            evenly_divisible_all_gather(torch.cat(b, dim=0), concat=True)
+            for b in self._buffers
+        ]
         self._synced = True
 
     def get_buffer(self):
@@ -250,11 +285,16 @@ class StreetMoverDistance(ABC):
         """
         if not self._synced:
             self._sync()
-        return self._synced_tensors[0] if len(self._synced_tensors) == 1 else self._synced_tensors
+        return (
+            self._synced_tensors[0]
+            if len(self._synced_tensors) == 1
+            else self._synced_tensors
+        )
 
 
-
-def compute_meanSMD(y_A, y_nodes, output_A, output_nodes, sinkhorn_distance, n_points=100):
+def compute_meanSMD(
+    y_A, y_nodes, output_A, output_nodes, sinkhorn_distance, n_points=100
+):
     """[summary]
 
     Args:
@@ -267,11 +307,11 @@ def compute_meanSMD(y_A, y_nodes, output_A, output_nodes, sinkhorn_distance, n_p
 
     Returns:
         [type]: [description]
-    """    ''''''
+    """ """"""
     y_pc = get_point_cloud(y_A, y_nodes, n_points)
     output_pc = get_point_cloud(output_A, output_nodes, n_points)
     sink_dist, P, C = sinkhorn_distance(y_pc, output_pc)
-    return sink_dist #(y_pc, output_pc), (sink_dist, P, C)
+    return sink_dist  # (y_pc, output_pc), (sink_dist, P, C)
 
 
 def get_point_cloud(A, nodes, n_points):
@@ -284,18 +324,20 @@ def get_point_cloud(A, nodes, n_points):
 
     Returns:
         [type]: [description]
-    """    ''''''
+    """ """"""
     n_divisions = n_points - 1 + 0.01
     total_len = get_cumulative_distance(A, nodes)
     step = total_len / n_divisions
     points = []
-    next_step = 0.
-    used_len = 0.
-    
+    next_step = 0.0
+    used_len = 0.0
+
     for i in range(A.shape[0]):
         for j in range(i):
-            if A[i, j] == 1.:
-                next_step, used, pts = get_points(next_step, step, nodes[i-j-1].clone(), nodes[i].clone())
+            if A[i, j] == 1.0:
+                next_step, used, pts = get_points(
+                    next_step, step, nodes[i - j - 1].clone(), nodes[i].clone()
+                )
                 used_len += used
                 points += pts
                 last_node = nodes[i].clone()
@@ -303,13 +345,15 @@ def get_point_cloud(A, nodes, n_points):
     # trick in case we miss points, due to approximations in python computation of distances
     if 0 < len(points) < n_points:
         while len(points) < n_points:
-            points.append((last_node[0].item(), last_node[1].item(), last_node[2].item()))
+            points.append(
+                (last_node[0].item(), last_node[1].item(), last_node[2].item())
+            )
     # if the graph has no edges, create point cloud with 100 points in (0,0)
     if len(points) == 0:
         return torch.zeros((n_points, 3))
         # print(f"The point cloud has an expected number of points: {len(points)} instead of {n_points}")
     # print(f"Generated {len(points)} points using {used_len}/{total_len} length")
-#         print(np.array(points).shape)
+    #         print(np.array(points).shape)
     return torch.FloatTensor(points)
 
 
@@ -322,16 +366,16 @@ def get_cumulative_distance(A, nodes):
 
     Returns:
         [type]: [description]
-    """    ''''''
-    tot = 0.
-    #print("Shape:",A.shape)
-    #print("Shape[0]:",A.shape[0])
+    """ """"""
+    tot = 0.0
+    # print("Shape:",A.shape)
+    # print("Shape[0]:",A.shape[0])
     for i in range(A.shape[0]):
         for j in range(i):
-            #print(i, j)
-            if A[i, j] == 1.:
-                #print(nodes[i], nodes[i-j-1])
-                tot += euclidean_distance(nodes[i], nodes[i-j-1])
+            # print(i, j)
+            if A[i, j] == 1.0:
+                # print(nodes[i], nodes[i-j-1])
+                tot += euclidean_distance(nodes[i], nodes[i - j - 1])
     return tot
 
 
@@ -343,19 +387,19 @@ def get_points(next_step, step, a, b):
         step ([type]): [description]
         a ([type]): [description]
         b ([type]): [description]
-    """    ''''''
-#     print(a, b)
+    """ """"""
+    #     print(a, b)
     l = euclidean_distance(a, b)
-    vec = b-a
-    unit_vec = vec/l
+    vec = b - a
+    unit_vec = vec / l
     pts = []
     used = 0
     while next_step <= l:
         used += next_step
         l -= next_step
-        a[0] += unit_vec[0]*next_step
-        a[1] += unit_vec[1]*next_step
-        a[2] += unit_vec[2]*next_step
+        a[0] += unit_vec[0] * next_step
+        a[1] += unit_vec[1] * next_step
+        a[2] += unit_vec[2] * next_step
         pts.append((a[0].item(), a[1].item(), a[2].item()))
         next_step = step
     next_step = step - l
@@ -383,11 +427,13 @@ class SinkhornDistance(nn.Module):
         - Input: :math:`(N, P_1, D_1)`, :math:`(N, P_2, D_2)`
         - Output: :math:`(N)` or :math:`()`, depending on `reduction`
     """
-    def __init__(self, eps, max_iter, reduction='none'):
+
+    def __init__(self, eps, max_iter, reduction="none"):
         super(SinkhornDistance, self).__init__()
         self.eps = eps
         self.max_iter = max_iter
         self.reduction = reduction
+
     def forward(self, x, y):
         # The Sinkhorn algorithm takes as input three variables :
         C = self._cost_matrix(x, y)  # Wasserstein cost function
@@ -398,10 +444,16 @@ class SinkhornDistance(nn.Module):
         else:
             batch_size = x.shape[0]
         # both marginals are fixed with equal weights
-        mu = torch.empty(batch_size, x_points, dtype=torch.float,
-                         requires_grad=False).fill_(1.0 / x_points).squeeze()
-        nu = torch.empty(batch_size, y_points, dtype=torch.float,
-                         requires_grad=False).fill_(1.0 / y_points).squeeze()
+        mu = (
+            torch.empty(batch_size, x_points, dtype=torch.float, requires_grad=False)
+            .fill_(1.0 / x_points)
+            .squeeze()
+        )
+        nu = (
+            torch.empty(batch_size, y_points, dtype=torch.float, requires_grad=False)
+            .fill_(1.0 / y_points)
+            .squeeze()
+        )
         u = torch.zeros_like(mu)
         v = torch.zeros_like(nu)
         # To check if algorithm terminates because of threshold
@@ -412,8 +464,19 @@ class SinkhornDistance(nn.Module):
         # Sinkhorn iterations
         for i in range(self.max_iter):
             u1 = u  # useful to check the update
-            u = self.eps * (torch.log(mu + 1e-8) - torch.logsumexp(self.M(C, u, v), dim=-1)) + u
-            v = self.eps * (torch.log(nu + 1e-8) - torch.logsumexp(self.M(C, u, v).transpose(-2, -1), dim=-1)) + v
+            u = (
+                self.eps
+                * (torch.log(mu + 1e-8) - torch.logsumexp(self.M(C, u, v), dim=-1))
+                + u
+            )
+            v = (
+                self.eps
+                * (
+                    torch.log(nu + 1e-8)
+                    - torch.logsumexp(self.M(C, u, v).transpose(-2, -1), dim=-1)
+                )
+                + v
+            )
             err = (u - u1).abs().sum(-1).mean()
             actual_nits += 1
             if err.item() < thresh:
@@ -423,15 +486,17 @@ class SinkhornDistance(nn.Module):
         pi = torch.exp(self.M(C, U, V))
         # Sinkhorn distance
         cost = torch.sum(pi * C, dim=(-2, -1))
-        if self.reduction == 'mean':
+        if self.reduction == "mean":
             cost = cost.mean()
-        elif self.reduction == 'sum':
+        elif self.reduction == "sum":
             cost = cost.sum()
         return torch.tensor([cost]), pi, C
+
     def M(self, C, u, v):
         "Modified cost for logarithmic updates"
         "$M_{ij} = (-c_{ij} + u_i + v_j) / \epsilon$"
         return (-C + u.unsqueeze(-1) + v.unsqueeze(-2)) / self.eps
+
     @staticmethod
     def _cost_matrix(x, y, p=2):
         "Returns the matrix of $|x_i-y_j|^p$."
@@ -439,6 +504,7 @@ class SinkhornDistance(nn.Module):
         y_lin = y.unsqueeze(-3)
         C = torch.sum((torch.abs(x_col - y_lin)) ** p, -1)
         return C
+
     @staticmethod
     def ave(u, u1, tau):
         "Barycenter subroutine, used by kinetic acceleration through extrapolation."

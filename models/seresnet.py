@@ -8,9 +8,14 @@ from torch.hub import load_state_dict_from_url
 
 from monai.apps.utils import download_url
 from monai.networks.blocks.convolutions import Convolution
-from monai.networks.blocks.squeeze_and_excitation import SEBottleneck, SEResNetBottleneck, SEResNeXtBottleneck
+from monai.networks.blocks.squeeze_and_excitation import (
+    SEBottleneck,
+    SEResNetBottleneck,
+    SEResNeXtBottleneck,
+)
 from monai.networks.layers.factories import Act, Conv, Dropout, Norm, Pool
 from monai.utils.module import look_up_option
+
 
 class SENet(nn.Module):
     """
@@ -77,13 +82,21 @@ class SENet(nn.Module):
         super().__init__()
 
         relu_type: Type[nn.ReLU] = Act[Act.RELU]
-        conv_type: Type[Union[nn.Conv1d, nn.Conv2d, nn.Conv3d]] = Conv[Conv.CONV, spatial_dims]
-        pool_type: Type[Union[nn.MaxPool1d, nn.MaxPool2d, nn.MaxPool3d]] = Pool[Pool.MAX, spatial_dims]
-        norm_type: Type[Union[nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d]] = Norm[Norm.BATCH, spatial_dims]
-        dropout_type: Type[Union[nn.Dropout, nn.Dropout2d, nn.Dropout3d]] = Dropout[Dropout.DROPOUT, dropout_dim]
-        avg_pool_type: Type[Union[nn.AdaptiveAvgPool1d, nn.AdaptiveAvgPool2d, nn.AdaptiveAvgPool3d]] = Pool[
-            Pool.ADAPTIVEAVG, spatial_dims
+        conv_type: Type[Union[nn.Conv1d, nn.Conv2d, nn.Conv3d]] = Conv[
+            Conv.CONV, spatial_dims
         ]
+        pool_type: Type[Union[nn.MaxPool1d, nn.MaxPool2d, nn.MaxPool3d]] = Pool[
+            Pool.MAX, spatial_dims
+        ]
+        norm_type: Type[Union[nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d]] = Norm[
+            Norm.BATCH, spatial_dims
+        ]
+        dropout_type: Type[Union[nn.Dropout, nn.Dropout2d, nn.Dropout3d]] = Dropout[
+            Dropout.DROPOUT, dropout_dim
+        ]
+        avg_pool_type: Type[
+            Union[nn.AdaptiveAvgPool1d, nn.AdaptiveAvgPool2d, nn.AdaptiveAvgPool3d]
+        ] = Pool[Pool.ADAPTIVEAVG, spatial_dims]
 
         self.inplanes = inplanes
         self.spatial_dims = spatial_dims
@@ -94,16 +107,40 @@ class SENet(nn.Module):
             layer0_modules = [
                 (
                     "conv1",
-                    conv_type(in_channels=in_channels, out_channels=64, kernel_size=3, stride=2, padding=1, bias=False),
+                    conv_type(
+                        in_channels=in_channels,
+                        out_channels=64,
+                        kernel_size=3,
+                        stride=2,
+                        padding=1,
+                        bias=False,
+                    ),
                 ),
                 ("bn1", norm_type(num_features=64)),
                 ("relu1", relu_type(inplace=True)),
-                ("conv2", conv_type(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1, bias=False)),
+                (
+                    "conv2",
+                    conv_type(
+                        in_channels=64,
+                        out_channels=64,
+                        kernel_size=3,
+                        stride=1,
+                        padding=1,
+                        bias=False,
+                    ),
+                ),
                 ("bn2", norm_type(num_features=64)),
                 ("relu2", relu_type(inplace=True)),
                 (
                     "conv3",
-                    conv_type(in_channels=64, out_channels=inplanes, kernel_size=3, stride=1, padding=1, bias=False),
+                    conv_type(
+                        in_channels=64,
+                        out_channels=inplanes,
+                        kernel_size=3,
+                        stride=1,
+                        padding=1,
+                        bias=False,
+                    ),
                 ),
                 ("bn3", norm_type(num_features=inplanes)),
                 ("relu3", relu_type(inplace=True)),
@@ -113,17 +150,29 @@ class SENet(nn.Module):
                 (
                     "conv1",
                     conv_type(
-                        in_channels=in_channels, out_channels=inplanes, kernel_size=7, stride=2, padding=3, bias=False
+                        in_channels=in_channels,
+                        out_channels=inplanes,
+                        kernel_size=7,
+                        stride=2,
+                        padding=3,
+                        bias=False,
                     ),
                 ),
                 ("bn1", norm_type(num_features=inplanes)),
                 ("relu1", relu_type(inplace=True)),
             ]
 
-        layer0_modules.append(("pool", pool_type(kernel_size=3, stride=2, ceil_mode=True)))
+        layer0_modules.append(
+            ("pool", pool_type(kernel_size=3, stride=2, ceil_mode=True))
+        )
         self.layer0 = nn.Sequential(OrderedDict(layer0_modules))
         self.layer1 = self._make_layer(
-            block, planes=64, blocks=layers[0], groups=groups, reduction=reduction, downsample_kernel_size=1
+            block,
+            planes=64,
+            blocks=layers[0],
+            groups=groups,
+            reduction=reduction,
+            downsample_kernel_size=1,
         )
         self.layer2 = self._make_layer(
             block,
@@ -236,17 +285,19 @@ class SENet(nn.Module):
         x = self.features(x)
         # x = self.logits(x)
         return x
-    
-    
+
+
 def build_seresnet(config):
-    model = SENet(block=SEResNetBottleneck,
-                  spatial_dims=config.DATA.DIM,
-                  in_channels=config.MODEL.ENCODER.IN_CHANS,
-                  layers=config.MODEL.ENCODER.DEPTHS,
-                  groups=1,
-                  reduction=16,
-                  inplanes=64,
-                  downsample_kernel_size=1,
-                  input_3x3=False,)
+    model = SENet(
+        block=SEResNetBottleneck,
+        spatial_dims=config.DATA.DIM,
+        in_channels=config.MODEL.ENCODER.IN_CHANS,
+        layers=config.MODEL.ENCODER.DEPTHS,
+        groups=1,
+        reduction=16,
+        inplanes=64,
+        downsample_kernel_size=1,
+        input_3x3=False,
+    )
 
     return model

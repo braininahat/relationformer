@@ -1,4 +1,14 @@
-from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import torch
 from torch.optim.optimizer import Optimizer
@@ -20,7 +30,14 @@ from monai.utils.enums import CommonKeys as Keys
 import os
 from torch.nn.functional import interpolate
 from monai.engines import SupervisedTrainer
-from monai.handlers import LrScheduleHandler, ValidationHandler, StatsHandler, TensorBoardStatsHandler, CheckpointSaver, MeanDice
+from monai.handlers import (
+    LrScheduleHandler,
+    ValidationHandler,
+    StatsHandler,
+    TensorBoardStatsHandler,
+    CheckpointSaver,
+    MeanDice,
+)
 from monai.transforms import (
     Compose,
     AsDiscreted,
@@ -34,9 +51,15 @@ if TYPE_CHECKING:
     from ignite.engine import Engine, EventEnum
     from ignite.metrics import Metric
 else:
-    Engine, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine")
-    Metric, _ = optional_import("ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric")
-    EventEnum, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "EventEnum")
+    Engine, _ = optional_import(
+        "ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine"
+    )
+    Metric, _ = optional_import(
+        "ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric"
+    )
+    EventEnum, _ = optional_import(
+        "ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "EventEnum"
+    )
 
 
 # define customized trainer
@@ -83,31 +106,36 @@ class RelationformerTrainer(SupervisedTrainer):
             event_names=event_names,
             event_to_attr=event_to_attr,
             decollate=decollate,
-            network = network,
-            optimizer = optimizer,
-            loss_function = loss_function,
-            inferer = SimpleInferer() if inferer is None else inferer,
-            optim_set_to_none = optim_set_to_none,
+            network=network,
+            optimizer=optimizer,
+            loss_function=loss_function,
+            inferer=SimpleInferer() if inferer is None else inferer,
+            optim_set_to_none=optim_set_to_none,
         )
-        self.config = kwargs.pop('config')
+        self.config = kwargs.pop("config")
 
     def _iteration(self, engine, batchdata):
-        images, segs, nodes, edges = batchdata[0], batchdata[1], batchdata[2], batchdata[3]
-        
+        images, segs, nodes, edges = (
+            batchdata[0],
+            batchdata[1],
+            batchdata[2],
+            batchdata[3],
+        )
+
         # # inputs, targets = self.get_batch(batchdata, image_keys=IMAGE_KEYS, label_keys="label")
         # # inputs = torch.cat(inputs, 1)
-        images = images.to(engine.state.device,  non_blocking=False)
-        segs = segs.to(engine.state.device,  non_blocking=False)
-        nodes = [node.to(engine.state.device,  non_blocking=False) for node in nodes]
-        edges = [edge.to(engine.state.device,  non_blocking=False) for edge in edges]
+        images = images.to(engine.state.device, non_blocking=False)
+        segs = segs.to(engine.state.device, non_blocking=False)
+        nodes = [node.to(engine.state.device, non_blocking=False) for node in nodes]
+        edges = [edge.to(engine.state.device, non_blocking=False) for edge in edges]
         target = {"nodes": nodes, "edges": edges}
 
         self.network.train()
         self.optimizer.zero_grad()
-        
+
         h, out = self.network(segs)
-        
-        valid_token = torch.argmax(out['pred_logits'], -1)
+
+        valid_token = torch.argmax(out["pred_logits"], -1)
         # valid_token = torch.sigmoid(nodes_prob[...,3])>0.5
         # print('valid_token number', valid_token.sum(1))
 
@@ -120,17 +148,27 @@ class RelationformerTrainer(SupervisedTrainer):
         #     max_norm=GRADIENT_CLIP_L2_NORM,
         #     norm_type=2,
         # )
-        losses['total'].backward()
+        losses["total"].backward()
         self.optimizer.step()
-        
+
         gc.collect()
         torch.cuda.empty_cache()
 
         return {"images": images, "nodes": nodes, "edges": edges, "loss": losses}
 
 
-def build_trainer(train_loader, net, loss, optimizer, scheduler, writer,
-                  evaluator, config, device, fp16=False):
+def build_trainer(
+    train_loader,
+    net,
+    loss,
+    optimizer,
+    scheduler,
+    writer,
+    evaluator,
+    config,
+    device,
+    fp16=False,
+):
     """[summary]
 
     Args:
@@ -153,55 +191,58 @@ def build_trainer(train_loader, net, loss, optimizer, scheduler, writer,
             epoch_level=False,
         ),
         ValidationHandler(
-            validator=evaluator,
-            interval=config.TRAIN.VAL_INTERVAL,
-            epoch_level=True
+            validator=evaluator, interval=config.TRAIN.VAL_INTERVAL, epoch_level=True
         ),
         StatsHandler(
-            tag_name="train_loss",
-            output_transform=lambda x: x["loss"]["total"]
+            tag_name="train_loss", output_transform=lambda x: x["loss"]["total"]
         ),
         CheckpointSaver(
-            save_dir=os.path.join(config.TRAIN.SAVE_PATH, "runs", '%s_%d' % (config.log.exp_name, config.DATA.SEED), 'models'),
+            save_dir=os.path.join(
+                config.TRAIN.SAVE_PATH,
+                "runs",
+                "%s_%d" % (config.log.exp_name, config.DATA.SEED),
+                "models",
+            ),
             save_dict={"net": net, "optimizer": optimizer, "scheduler": scheduler},
             save_interval=1,
-            n_saved=1),
+            n_saved=1,
+        ),
         TensorBoardStatsHandler(
             writer,
             tag_name="classification_loss",
             output_transform=lambda x: x["loss"]["class"],
-            global_epoch_transform=lambda x: scheduler.last_epoch
+            global_epoch_transform=lambda x: scheduler.last_epoch,
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="node_loss",
             output_transform=lambda x: x["loss"]["nodes"],
-            global_epoch_transform=lambda x: scheduler.last_epoch
+            global_epoch_transform=lambda x: scheduler.last_epoch,
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="edge_loss",
             output_transform=lambda x: x["loss"]["edges"],
-            global_epoch_transform=lambda x: scheduler.last_epoch
+            global_epoch_transform=lambda x: scheduler.last_epoch,
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="box_loss",
             output_transform=lambda x: x["loss"]["boxes"],
-            global_epoch_transform=lambda x: scheduler.last_epoch
+            global_epoch_transform=lambda x: scheduler.last_epoch,
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="card_loss",
             output_transform=lambda x: x["loss"]["cards"],
-            global_epoch_transform=lambda x: scheduler.last_epoch
+            global_epoch_transform=lambda x: scheduler.last_epoch,
         ),
         TensorBoardStatsHandler(
             writer,
             tag_name="total_loss",
             output_transform=lambda x: x["loss"]["total"],
-            global_epoch_transform=lambda x: scheduler.last_epoch
-        )
+            global_epoch_transform=lambda x: scheduler.last_epoch,
+        ),
     ]
     # train_post_transform = Compose(
     #     [AsDiscreted(keys=("pred", "label"),
@@ -211,7 +252,7 @@ def build_trainer(train_loader, net, loss, optimizer, scheduler, writer,
     # )
 
     trainer = RelationformerTrainer(
-        config= config,
+        config=config,
         device=device,
         max_epochs=config.TRAIN.EPOCHS,
         train_data_loader=train_loader,

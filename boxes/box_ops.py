@@ -7,9 +7,14 @@ from typing import Union, Sequence, Tuple
 
 def box_cxcyczwhd_to_xyxyzz(x):
     x_c, y_c, z_c, w, h, d = x.unbind(-1)
-    b = [(x_c - 0.5 * w), (y_c - 0.5 * h),
-         (x_c + 0.5 * w), (y_c + 0.5 * h),
-         (z_c - 0.5 * d), (z_c + 0.5 * d)]
+    b = [
+        (x_c - 0.5 * w),
+        (y_c - 0.5 * h),
+        (x_c + 0.5 * w),
+        (y_c + 0.5 * h),
+        (z_c - 0.5 * d),
+        (z_c + 0.5 * d),
+    ]
     return torch.stack(b, dim=-1)
 
 
@@ -24,26 +29,30 @@ def box_area_3d(boxes: Tensor) -> Tensor:
     """
     Computes the area of a set of bounding boxes, which are specified by its
     (x1, y1, x2, y2, z1, z2) coordinates.
-    
+
     Arguments:
         boxes (Union[Tensor, ndarray]): boxes for which the area will be computed. They
             are expected to be in (x1, y1, x2, y2, z1, z2) format. [N, 6]
     Returns:
         area (Union[Tensor, ndarray]): area for each box [N]
     """
-    return (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) * (boxes[:, 5] - boxes[:, 4])
+    return (
+        (boxes[:, 2] - boxes[:, 0])
+        * (boxes[:, 3] - boxes[:, 1])
+        * (boxes[:, 5] - boxes[:, 4])
+    )
 
 
 def box_area(boxes: Union[Tensor, ndarray]) -> Union[Tensor, ndarray]:
     """
     Computes the area of a set of bounding boxes
-    
+
     Args:
         boxes (Union[Tensor, ndarray]): boxes of shape; (x1, y1, x2, y2, (z1, z2))[N, dim * 2]
-    
+
     Returns:
         Union[Tensor, ndarray]: area of boxes
-    
+
     See Also:
         :func:`box_area_3d`, :func:`torchvision.ops.boxes.box_area`
     """
@@ -51,11 +60,13 @@ def box_area(boxes: Union[Tensor, ndarray]) -> Union[Tensor, ndarray]:
     return box_area_3d(boxes)
 
 
-def box_iou_union_3d(boxes1: Tensor, boxes2: Tensor, eps: float = 0) -> Tuple[Tensor, Tensor]:
+def box_iou_union_3d(
+    boxes1: Tensor, boxes2: Tensor, eps: float = 0
+) -> Tuple[Tensor, Tensor]:
     """
     Return intersection-over-union (Jaccard index) and  of boxes.
     Both sets of boxes are expected to be in (x1, y1, x2, y2, z1, z2) format.
-    
+
     Args:
         boxes1: set of boxes (x1, y1, x2, y2, z1, z2)[N, 6]
         boxes2: set of boxes (x1, y1, x2, y2, z1, z2)[M, 6]
@@ -76,8 +87,10 @@ def box_iou_union_3d(boxes1: Tensor, boxes2: Tensor, eps: float = 0) -> Tuple[Te
     z1 = torch.max(boxes1[:, None, 4], boxes2[:, 4])  # [N, M]
     z2 = torch.min(boxes1[:, None, 5], boxes2[:, 5])  # [N, M]
 
-    inter = ((x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0) * (z2 - z1).clamp(min=0)) + eps  # [N, M]
-    union = (vol1[:, None] + vol2 - inter)
+    inter = (
+        (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0) * (z2 - z1).clamp(min=0)
+    ) + eps  # [N, M]
+    union = vol1[:, None] + vol2 - inter
     return inter / union, union
 
 
@@ -101,5 +114,7 @@ def generalized_box_iou_3d(boxes1: Tensor, boxes2: Tensor, eps: float = 0) -> Te
     z1 = torch.min(boxes1[:, None, 4], boxes2[:, 4])  # [N, M]
     z2 = torch.max(boxes1[:, None, 5], boxes2[:, 5])  # [N, M]
 
-    vol = ((x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0) * (z2 - z1).clamp(min=0)) + eps  # [N, M]
+    vol = (
+        (x2 - x1).clamp(min=0) * (y2 - y1).clamp(min=0) * (z2 - z1).clamp(min=0)
+    ) + eps  # [N, M]
     return iou - (vol - union) / vol

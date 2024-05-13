@@ -1,4 +1,3 @@
-
 import torch
 import math
 from torch import nn
@@ -13,42 +12,54 @@ from .box_ops_np import box_iou_np
 from .matching import matching_batch
 import numpy as np
 import warnings
+
 reinit__is_reduced, _ = optional_import(
-    "ignite.metrics.metric", IgniteInfo.OPT_IMPORT_VERSION, min_version, "reinit__is_reduced"
+    "ignite.metrics.metric",
+    IgniteInfo.OPT_IMPORT_VERSION,
+    min_version,
+    "reinit__is_reduced",
 )
 if TYPE_CHECKING:
     from ignite.engine import Engine
     from ignite.metrics import Metric
 else:
-    Engine, _ = optional_import("ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine")
-    Metric, _ = optional_import("ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric")
+    Engine, _ = optional_import(
+        "ignite.engine", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Engine"
+    )
+    Metric, _ = optional_import(
+        "ignite.metrics", IgniteInfo.OPT_IMPORT_VERSION, min_version, "Metric"
+    )
 import pdb
 from abc import ABC
 
 # @self._engine.on(Events.EPOCH_COMPLETED)
 
 from .coco import COCOMetric
+
+
 class MeanBoxAP(Metric):
     """[summary]
 
     Args:
         Metric ([type]): [description]
     """
-    def __init__(self,
-                 output_transform: Callable = lambda x: x,
-                 max_detections: int = 100):
+
+    def __init__(
+        self, output_transform: Callable = lambda x: x, max_detections: int = 100
+    ):
         """[summary]
 
         Args:
             output_transform (Callable, optional): [description]. Defaults to lambdax:x.
         """
         self.iou_fn = box_iou_np
-        metrics = tuple([COCOMetric(classes=['Node'], per_class=False, verbose=False)])
-        self.metric_fn = BoxAP(metrics=metrics,
-                               reduction='none',
-                               max_detections=max_detections
-                              )
-        super().__init__(output_transform=output_transform,)
+        metrics = tuple([COCOMetric(classes=["Node"], per_class=False, verbose=False)])
+        self.metric_fn = BoxAP(
+            metrics=metrics, reduction="none", max_detections=max_detections
+        )
+        super().__init__(
+            output_transform=output_transform,
+        )
 
     @reinit__is_reduced
     def reset(self) -> None:
@@ -66,7 +77,9 @@ class MeanBoxAP(Metric):
         """
         pred_boxes, pred_classes, pred_scores, gt_boxes, gt_classes = output
 
-        return self.metric_fn(pred_boxes, pred_classes, pred_scores, gt_boxes, gt_classes)
+        return self.metric_fn(
+            pred_boxes, pred_classes, pred_scores, gt_boxes, gt_classes
+        )
 
     # TODO: change to adapt multiple metrics at the same time
     def compute(self) -> Any:
@@ -81,7 +94,9 @@ class MeanBoxAP(Metric):
         result = self.metric_fn.aggregate()
         if isinstance(result, (tuple, list)):
             if len(result) > 1:
-                warnings.warn("metric handler can only record the first value of result list.")
+                warnings.warn(
+                    "metric handler can only record the first value of result list."
+                )
             result = result[0]
 
         self._is_reduced = True
@@ -89,12 +104,14 @@ class MeanBoxAP(Metric):
         # save score of every image into engine.state for other components
         if self.save_details:
             if self._engine is None or self._name is None:
-                raise RuntimeError("please call the attach() function to connect expected engine first.")
+                raise RuntimeError(
+                    "please call the attach() function to connect expected engine first."
+                )
             for key in result.keys():
                 print(key, result[key])
                 self._engine.state.metric_details[key] = result[key]
         # TODO: currently returning only one resut
-        return result['mAP_IoU_0.50_0.95_0.05_MaxDet_40']
+        return result["mAP_IoU_0.50_0.95_0.05_MaxDet_40"]
 
     def attach(self, engine: Engine, name: str) -> None:
         """[summary]
@@ -102,11 +119,11 @@ class MeanBoxAP(Metric):
         Args:
             engine (Engine): [description]
             name (str): [description]
-        """        
+        """
         super().attach(engine=engine, name=name)
         # FIXME: record engine for communication, ignite will support it in the future version soon
         self._engine = engine
-        self._name = name # TODO: incorporate all metric name
+        self._name = name  # TODO: incorporate all metric name
         if self.save_details and not hasattr(engine.state, "metric_details"):
             engine.state.metric_details = {}
 
@@ -124,13 +141,15 @@ class BoxAP(ABC):
 
     Returns:
         [type]: [description]
-    """    
-    def __init__(self,
-                metrics: Sequence[ABC],
-                iou_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] = box_iou_np,
-                reduction="mean",
-                max_detections=100
-                ):
+    """
+
+    def __init__(
+        self,
+        metrics: Sequence[ABC],
+        iou_fn: Callable[[np.ndarray, np.ndarray], np.ndarray] = box_iou_np,
+        reduction="mean",
+        max_detections=100,
+    ):
         """[summary]
 
         Args:
@@ -143,8 +162,15 @@ class BoxAP(ABC):
         self.metrics = metrics
         self.iou_fn = iou_fn
         self.iou_thresholds = get_unique_iou_thresholds(metrics)
-        self.iou_mapping = get_indices_of_iou_for_each_metric(self.iou_thresholds, metrics)
-        self.box_ap = box_ap(iou_fn, self.iou_thresholds, reduction=reduction, max_detections=max_detections)
+        self.iou_mapping = get_indices_of_iou_for_each_metric(
+            self.iou_thresholds, metrics
+        )
+        self.box_ap = box_ap(
+            iou_fn,
+            self.iou_thresholds,
+            reduction=reduction,
+            max_detections=max_detections,
+        )
 
         # the default one
         self.buffer_num: int = 0
@@ -162,7 +188,7 @@ class BoxAP(ABC):
 
         Returns:
             [type]: [description]
-        """        
+        """
 
         ret = self.box_ap(pred_boxes, pred_classes, pred_scores, gt_boxes, gt_classes)
         self.add(ret)
@@ -186,7 +212,7 @@ class BoxAP(ABC):
 
         """
         self._buffers.extend(data)
-        
+
         self._synced = False
 
     def aggregate(self) -> Tuple[Dict[str, float], Dict[str, np.ndarray]]:
@@ -202,10 +228,11 @@ class BoxAP(ABC):
             score, curve = metric(iou_filtered_results)
             if score is not None:
                 metric_scores.update(score)
-            
+
             if curve is not None:
                 metric_curves.update(curve)
-        return metric_scores #, metric_curves # TODO: need to check what to do with the curves
+        return metric_scores  # , metric_curves # TODO: need to check what to do with the curves
+
 
 def get_unique_iou_thresholds(metrics):
     """
@@ -216,19 +243,25 @@ def get_unique_iou_thresholds(metrics):
     iou_thresholds.sort()
     return iou_thresholds
 
+
 def get_indices_of_iou_for_each_metric(iou_thresholds, metrics):
     """
     Find indices of iou thresholds for each metric
     """
-    return [[iou_thresholds.index(th) for th in m.get_iou_thresholds()]
-            for m in metrics]
+    return [
+        [iou_thresholds.index(th) for th in m.get_iou_thresholds()] for m in metrics
+    ]
 
-def iou_filter(image_dict: Dict[int, Dict[str, np.ndarray]], iou_idx: List[int],
-                filter_keys: Sequence[str] = ('dtMatches', 'gtMatches', 'dtIgnore')):
+
+def iou_filter(
+    image_dict: Dict[int, Dict[str, np.ndarray]],
+    iou_idx: List[int],
+    filter_keys: Sequence[str] = ("dtMatches", "gtMatches", "dtIgnore"),
+):
     """
     This functions can be used to filter specific IoU values from the results
     to make sure that the correct IoUs are passed to metric
-    
+
     Parameters
     ----------
     image_dict : dict
@@ -237,7 +270,7 @@ def iou_filter(image_dict: Dict[int, Dict[str, np.ndarray]], iou_idx: List[int],
         indices of IoU values to filter from keys
     filter_keys : tuple, optional
         keys to filter, by default ('dtMatches', 'gtMatches', 'dtIgnore')
-    
+
     Returns
     -------
     dict
@@ -246,37 +279,47 @@ def iou_filter(image_dict: Dict[int, Dict[str, np.ndarray]], iou_idx: List[int],
     iou_idx = list(iou_idx)
     filtered = {}
     for cls_key, cls_item in image_dict.items():
-        filtered[cls_key] = {key: item[iou_idx] if key in filter_keys else item
-                                for key, item in cls_item.items()}
+        filtered[cls_key] = {
+            key: item[iou_idx] if key in filter_keys else item
+            for key, item in cls_item.items()
+        }
     return filtered
 
 
 class box_ap(nn.Module):
-    def __init__(self, 
-                iou_fn,
-                iou_thresholds,
-                reduction='none',
-                max_detections=100):
+    def __init__(self, iou_fn, iou_thresholds, reduction="none", max_detections=100):
         super(box_ap, self).__init__()
         self.iou_fn = iou_fn
         self.iou_thresholds = iou_thresholds
         self.max_detections = max_detections
         self.reduction = reduction
 
-    def forward(self,
-                pred_boxes: Sequence[np.ndarray],
-                pred_classes: Sequence[np.ndarray],
-                pred_scores: Sequence[np.ndarray],
-                gt_boxes: Sequence[np.ndarray],
-                gt_classes: Sequence[np.ndarray],
-                gt_ignore: Sequence[Sequence[bool]] = None,
-                convert_box: bool=True,
-                ):
-                
+    def forward(
+        self,
+        pred_boxes: Sequence[np.ndarray],
+        pred_classes: Sequence[np.ndarray],
+        pred_scores: Sequence[np.ndarray],
+        gt_boxes: Sequence[np.ndarray],
+        gt_classes: Sequence[np.ndarray],
+        gt_ignore: Sequence[Sequence[bool]] = None,
+        convert_box: bool = True,
+    ):
+
         if gt_ignore is None:
-            n = [0 if gt_boxes_img.size == 0 else gt_boxes_img.shape[0] for gt_boxes_img in gt_boxes]
+            n = [
+                0 if gt_boxes_img.size == 0 else gt_boxes_img.shape[0]
+                for gt_boxes_img in gt_boxes
+            ]
             gt_ignore = [np.zeros(_n).reshape(-1) for _n in n]
         return matching_batch(
-            self.iou_fn, self.iou_thresholds, pred_boxes=pred_boxes, pred_classes=pred_classes,
-            pred_scores=pred_scores, gt_boxes=gt_boxes, gt_classes=gt_classes, gt_ignore=gt_ignore,
-            max_detections=self.max_detections, convert_box=convert_box)
+            self.iou_fn,
+            self.iou_thresholds,
+            pred_boxes=pred_boxes,
+            pred_classes=pred_classes,
+            pred_scores=pred_scores,
+            gt_boxes=gt_boxes,
+            gt_classes=gt_classes,
+            gt_ignore=gt_ignore,
+            max_detections=self.max_detections,
+            convert_box=convert_box,
+        )
